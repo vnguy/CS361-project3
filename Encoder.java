@@ -14,17 +14,19 @@ public class Encoder {
 
 	public static void main(String[] args)throws FileNotFoundException, IOException {
 		int[] countTracker = new int[26];
-		ArrayList<TreeNode> symbolList = new ArrayList<TreeNode> ();
+		ArrayList<TreeNode> symbolList = new ArrayList<TreeNode>();;
+		
 		int count = 0;
 		double entropy = 0;
 		double efficiency = 0;
 		TreeNode root;
+		TreeNode root2;
 		String file = args[0];
 		int testFileSize = Integer.parseInt(args[1]);
 		BufferedReader in = new BufferedReader(new FileReader(file));
 		
 		String currentLine = in.readLine();
-		int numSymbols = 0;
+		int numSymbols = 0;// number of 
 		while(currentLine != null) {
 			if(currentLine.equals("")){
 				currentLine = in.readLine();
@@ -38,8 +40,9 @@ public class Encoder {
 		entropy = calcEntropy(countTracker, numSymbols, count);
 		System.out.println("Entropy = " + entropy);
 		createSymbolList(1, countTracker, numSymbols, count, symbolList);
-		PriorityQueue<TreeNode> queue = new PriorityQueue<TreeNode>(26, new TreeNodeComparator());
+		PriorityQueue<TreeNode> queue = new PriorityQueue<TreeNode>(numSymbols, new TreeNodeComparator());
 		int numEncodings = symbolList.size();
+		//insertQueue(queue,symbolList,numEncodings);
 		for(int i = 0; i < numEncodings; ++i){
 			queue.add(symbolList.get(i));
 		}
@@ -49,17 +52,51 @@ public class Encoder {
 		HashMap<String, String> valueMap = buildValueMap(keyMap);
 		
 		int size = keyMap.size();
+		
+		//test mode 1
 		for(int i = 0; i < numEncodings; ++i){
 			String name = symbolList.get(i).name;
 			System.out.println("Name: " + name + ", Encoding: " + keyMap.get(name));
 		}
 		
 		generateTestFile(testFileSize, numSymbols, symbolList);
-		efficiency = encodeFile(keyMap, "testText", testFileSize);
+		efficiency = encodeFile(keyMap, "testText", testFileSize, 1);
 		decodeFile(valueMap, "testText");
 		
 		System.out.println("Efficiency = " + (entropy / efficiency));
 		
+		symbolList = new ArrayList<TreeNode>();
+		numSymbols = numSymbols;
+		System.out.println("NUMBER OF SYMBOLS " + numSymbols);
+		createSymbolList(2, countTracker, numSymbols, count, symbolList);
+		//insertQueue(queue,symbolList,numEncodings);
+		 queue = new PriorityQueue<TreeNode>(numSymbols, new TreeNodeComparator());
+		numEncodings = symbolList.size();
+		//insertQueue(queue,symbolList,numEncodings);
+		for(int i = 0; i < numEncodings; ++i){
+			queue.add(symbolList.get(i));
+		}
+		
+		root2 = buildTree(queue);
+		keyMap = buildKey(root2);
+		valueMap = buildValueMap(keyMap);
+		double efficiency2 = encodeFile(keyMap, "testText", testFileSize, 2);
+		//generateTestFile(testFileSize, numSymbols, symbolList);
+		//test mode 2
+		for(int i = 0; i < numEncodings; ++i){
+			String name = symbolList.get(i).name;
+			System.out.println("Name: " + name + ", Encoding: " + keyMap.get(name));
+		}
+	
+	}
+	
+	
+	public static void insertQueue(PriorityQueue<TreeNode> queue,ArrayList<TreeNode> symbolList, int numEncodings) {
+		numEncodings = symbolList.size();
+		for(int i = 0; i < numEncodings; ++i){
+			queue.add(symbolList.get(i));
+		}
+		System.out.println("THIS IS NUM" + numEncodings);
 	}
 	
 	// ---------------
@@ -67,14 +104,31 @@ public class Encoder {
 	// ----------------
 	
 	public static void createSymbolList(int mode, int[] c, int numSymbols, int count, ArrayList<TreeNode> symbolList) {
+		float total = 0;
 		if(mode == 1) {
 			for(int i = 0; i < numSymbols; i++) {
 				String symbol = ""+(char)(i+65);
 				float currentFreq = (float)c[i] / count;
 				TreeNode currentNode = new TreeNode(symbol, currentFreq);
 				symbolList.add(currentNode);
+				total += currentFreq;//for test
 			}
-		}		
+			System.out.println("TOTAL IS: " + total);//test to check if probability is correct
+		} else if( mode == 2) {
+			for(int i = 0; i < numSymbols; i++) {
+				for(int j = 0; j < numSymbols; j++) {
+					String symbol = "" + (char)(i+65)+(char)(j+65);
+					float freq1 = (float)c[i]/count;
+					float freq2 = (float)c[j]/count;
+					float currentFreq = freq1 * freq2;
+					total += currentFreq;
+					//System.out.println(symbol + currentFreq);
+					TreeNode currentNode = new TreeNode(symbol, currentFreq);
+					symbolList.add(currentNode);
+				}
+			}
+			System.out.println("TOTAL IS: " + total);//test to check if probability is correct
+		}
 	}
 	
 	// ---------
@@ -148,7 +202,7 @@ public class Encoder {
 	// encodeFile
 	// ----------
 	
-	public static double encodeFile(HashMap<String, String> key, String file, int size) throws IOException{
+	public static double encodeFile(HashMap<String, String> key, String file, int size, int mode) throws IOException{
 		int totalBits = 0;
 		BufferedReader in;
 		try{
@@ -157,8 +211,12 @@ public class Encoder {
 			System.out.println("Error: can't open test file to encode.");
 			return -1;
 		}
-		
-		String newfile = file + ".enc1";
+		String newfile = "";
+		if(mode == 1) {
+			newfile = file + ".enc1";
+		}else if(mode == 2) {
+			newfile = file + ".enc2";	
+		}
 		File f = new File(newfile);
 		
 		if(!f.exists()){
@@ -182,12 +240,40 @@ public class Encoder {
 		BufferedWriter bw = new BufferedWriter(fw);
 		
 		int c;
-		while((c = in.read()) != -1){
-			String temp = key.get("" + (char)c);
-			bw.write(temp);
-			totalBits += temp.length();
+		if(mode == 1) {
+			while((c = in.read()) != -1){
+				String temp = key.get("" + (char)c);
+				bw.write(temp);
+				totalBits += temp.length();
+			}
+		} else if (mode == 2) {
+			//ArrayList<Character> charArray = new ArrayList<Character>();
+			String tempString = "";
+			int index = 0;
+			while((c = in.read()) != -1){
+				tempString += (char)c;
+				//System.out.println((char)c);
+			//	charArray.add(c);
+			}
+			while(index < tempString.length()) {
+				if(size%2 != 0 && index == tempString.length()-1) {
+					String current = tempString.substring(index);
+					String temp = key.get(current);
+					bw.write(temp);
+					totalBits += temp.length();
+
+				} else {
+					String current = tempString.substring(index,index+2);
+					String temp = key.get(current);
+					bw.write(temp);
+					totalBits += temp.length();
+					index++;
+				}
+				//System.out.println(tempString.charAt(index));
+				index++;
+			}
+	
 		}
-		
 		bw.close();
 		
 		return (double) totalBits / size;
